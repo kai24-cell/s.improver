@@ -26,10 +26,6 @@ pip install /path/to/audio_upsample.zip
 upsample [OPTIONS] 入力ファイル 出力ファイル ターゲットサンプリングレート
 ```
 
-```bash
-python3 example.py
-```
-
 ### 引数
 
 - `入力ファイル`：元のオーディオファイルのパス
@@ -45,5 +41,10 @@ python3 example.py
 
 ```bash
 upsample input.wav output.wav 96000 --numtaps 4096 --beta 9.0
+```
+もしくは
+
+```bash
+python3 example.py
 ```
 
