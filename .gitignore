@@ -1,0 +1,15 @@
+#仮想環境
+tf_env/
+#開発環境無視
+.vscode/
+#データセットを無視
+data/
+#モデルも省く(重くなっていくから)
+app/*.keras
+#pythonコンパイル済ファイル
+app/*.pyc
+# Mac開発者向け
+.DS_Store
+#モデルの重み
+*.hdf5
+__pycache__/

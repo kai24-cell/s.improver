@@ -1,0 +1,131 @@
+<<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI音質最適化ツール</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #111;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+    }
+
+    .container {
+      background: #1c1c1c;
+      padding: 2rem;
+      border-radius: 1rem;
+      box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+      max-width: 500px;
+      width: 90%;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      margin-bottom: 1rem;
+      text-align: center;
+    }
+
+    label {
+      display: block;
+      margin-top: 1rem;
+      margin-bottom: 0.5rem;
+      font-weight: bold;
+    }
+
+    input[type="url"],
+    input[type="file"] {
+      width: 100%;
+      padding: 0.75rem;
+      border-radius: 0.5rem;
+      border: none;
+      margin-bottom: 1rem;
+      font-size: 1rem;
+      background: #fff;
+      color: #000;
+    }
+
+    button {
+      width: 100%;
+      padding: 0.75rem;
+      background: #4caf50;
+      color: white;
+      border: none;
+      border-radius: 0.5rem;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+
+    button:hover {
+      background: #45a049;
+    }
+
+    .result {
+      margin-top: 1.5rem;
+      padding: 1rem;
+      background: #222;
+      border-radius: 0.5rem;
+    }
+
+    .link-preview {
+      margin-top: 1rem;
+      background: #333;
+      padding: 0.75rem;
+      border-radius: 0.5rem;
+      word-break: break-all;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>AI音質最適化</h1>
+    <form id="optimize-form">
+      <label for="url">音源URLを入力してください</label>
+      <input type="url" id="url" name="url" placeholder="https://...">
+
+      <label for="file">または音源ファイルを選択</label>
+      <input type="file" id="file" name="file" accept="audio/*">
+
+      <button type="submit">最適化開始</button>
+    </form>
+    <div class="link-preview" id="link-preview" style="display: none;"></div>
+    <div class="result" id="result" style="display: none;"></div>
+  </div>
+
+  <script>
+    document.getElementById('optimize-form').addEventListener('submit', function(e) {
+      e.preventDefault();
+      const urlInput = document.getElementById('url').value;
+      const fileInput = document.getElementById('file').files[0];
+      const result = document.getElementById('result');
+      const preview = document.getElementById('link-preview');
+
+      preview.style.display = 'block';
+      if (fileInput) {
+        preview.innerHTML = `<strong>選択されたファイル:</strong><br>${fileInput.name}`;
+      } else if (urlInput) {
+        preview.innerHTML = `<strong>入力されたURL:</strong><br><a href="${urlInput}" target="_blank" style="color:#4caf50;">${urlInput}</a>`;
+      } else {
+        preview.innerHTML = `<p style="color: red;">URLかファイルのどちらかを入力・選択してください。</p>`;
+        result.style.display = 'none';
+        return;
+      }
+
+      result.style.display = 'block';
+      result.innerHTML = '<p>解析中...しばらくお待ちください。</p>';
+
+      // フェイク処理（実際はここでAPIにリクエスト）
+      setTimeout(() => {
+        result.innerHTML = '<p>AIによる分析により，最適なEQが適用され，音質が向上しました．</p>';
+      }, 2000);
+    });
+  </script>
+</body>
+</html>
