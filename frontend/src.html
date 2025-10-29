@@ -106,6 +106,7 @@
       const fileInput = document.getElementById('file').files[0];
       const result = document.getElementById('result');
       const preview = document.getElementById('link-preview');
+      const api_url ='http://127.0.0.1:5000/process';//apiのurlだけど、まだ動くやつ設定してない
 
       preview.style.display = 'block';
       if (fileInput) {
@@ -121,10 +122,74 @@
       result.style.display = 'block';
       result.innerHTML = '<p>解析中...しばらくお待ちください。</p>';
 
-      // フェイク処理（実際はここでAPIにリクエスト）
-      setTimeout(() => {
-        result.innerHTML = '<p>AIによる分析により，最適なEQが適用され，音質が向上しました．</p>';
-      }, 2000);
+      
+      //処理開始
+      if(error_check()){
+        return;
+      }
+      //APIに送信するデータを作成 (キーを 'file' に変更)
+      const formData = new FormData();
+      formData.append('file', fileInput); 
+
+      // 4. fetch を使ってAPIにリクエストを送信
+      // FlaskのURL (http://127.0.0.1:5000/process) に合わせる
+      
+      fetch(api_url, {
+        method: 'POST',
+        body: formData,
+        // (Flask側でCORS設定がなければ、ここからローカルファイルは接続できません)
+      })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error('APIリクエストに失敗しました: ' + response.statusText);
+        }
+        // レスポンスはファイル(blob)として受け取る
+        return response.blob(); 
+      })
+      .then(blob => {
+        // 受け取ったblobからダウンロードURLを生成
+        const downloadUrl = window.URL.createObjectURL(blob);
+        
+        // ダウンロードリンクを作成して表示
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        
+        // 'optimized_audio.mp3' など、APIが返すファイル名を指定
+        // (Content-Dispositionヘッダーがあればそこから取得も可能)
+        link.download = 'optimized_' + fileInput.name; 
+        link.style.color = '#4caf50';
+        link.textContent = '最適化済み音源をダウンロード';
+        
+        result.innerHTML = '<p>最適化が完了しました！</p>';
+        result.appendChild(link);
+
+      })
+      .catch(error => {
+        // 7. エラー処理
+        console.error('APIリクエストエラー:', error);
+        // CORSエラーの場合、コンソールに詳細が出ます
+        result.innerHTML = `<p style="color: red;">エラーが発生しました: ${error.message}</p>
+          <p style="font-size: 0.8rem; color: #aaa;">(CORSエラーの可能性があります。ブラウザのコンソールを確認してください)</p>`;
+      });
+
+      function error_check(){
+        //一旦url入力は後回しにする
+        if(urlInput && !fileInput){
+        result.innerHTML = '<p style="color: red;">エラー: URL入力には対応していません。ファイルを選択してください。</p>';
+        return;
+      }
+      if (!fileInput) {
+        result.innerHTML = '<p style="color: red;">エラー: ファイルが選択されていません。</p>';
+        return;
+      }
+      }
+      // フェイク処理(使わないと思うけどデバック用に残してる)
+      function fake_deal(){
+        setTimeout(() => {
+         result.innerHTML = '<p>AIによる分析により，最適なEQが適用され，音質が向上しました．</p>';
+       }, 2000);
+      }
+
     });
   </script>
 </body>
