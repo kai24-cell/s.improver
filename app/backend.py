@@ -122,13 +122,3 @@ def backend_call(input_path):
     processed_audio = process_audio_mp3(audio_segment=processed_audio,tag=pred_label,output_path=output_path)
 
     return processed_audio
-"""
-没関数
-"""
-
-def normalize_audio_mp3(audio_segment: AudioSegment, output_path: str = None) -> str:#ノーマライズ曲の途中で音量が大きくなったり小さくなったりするするのを均一化する
-    audio = AudioSegment.from_mp3(audio_segment)
-    normalized_audio = normalize(audio)
-    out_path = output_path or audio_segment.replace(".mp3", "_normalized.mp3")
-    normalized_audio.export(out_path, format="mp3")
-    return out_path
