@@ -7,7 +7,7 @@ import tensorflow as tf
 import librosa
 
 try:
-    model=tf.keras.models.load_model('music_tagger_cnn_weights.tensorflow.h5')
+    model=tf.keras.models.load_model('music_speech.cnn.keras')
 except:
     print("モデルの読み取りに失敗しました")
     model=None
