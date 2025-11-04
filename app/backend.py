@@ -6,7 +6,12 @@ import os
 import tensorflow as tf
 import librosa
 
-model=tf.keras.models.load_model('music_speech.cnn.keras')
+try:
+    model=tf.keras.models.load_model('music_speech.cnn.keras')
+except:
+    print("モデルの読み取りに失敗しました")
+    model=None
+    
 TWO_FIFTEEN = 32768 - 1
 fifty_per=0.5
 #音声の特定の周波数帯域の音量を調整
@@ -14,33 +19,25 @@ fifty_per=0.5
 bands:強調する場所
 gain:強調する音の大きさ
 """
-def process_audio_mp3(file_path: str, tag: str, gains: list[float], output_path: str = None) -> str:#イコライザ変換する幅の指定
-    audio = AudioSegment.from_mp3(file_path)
-    rate, samples = mp3_to_np_array(audio)
+def process_audio_mp3(audio_segment: AudioSegment, tag: str, output_path: str = None) -> str:#イコライザ変換する幅の指定
+    rate, samples = mp3_to_np_array(audio_segment)
 
-    if tag == "song":
+    if tag == "music":
         bands = [(32, 64), (64, 125), (125, 250), (250, 500),#32,64なら32HZから64HZを指してる
                  (500, 1000), (1000, 2400), (2400, 4000),
                  (4000, 8000), (8000, 12500), (12500, 16500)]
         gains =[1.2,1.15,1.1,1.0,1.0,1.0,1.1,1.15,1.2,1.2]#1.0が100%で.0.1違うと10%変わる
-    elif tag == "talk":
+    elif tag == "speech":
         bands = [(64, 120), (120, 250), (250, 500),
                  (500, 1000), (1000, 2400), (2400, 8000)]
         gains = [0.9,1.0,1.1,1.2,1.1,1.0]
     else:
-        raise ValueError("分類失敗しました")
+        raise ValueError("タグ付け分類失敗しました")
 
     processed = apply_equalizer(rate, samples, bands, gains)
-
-    out_path = output_path or file_path.replace(".mp3", f"_{tag}_processed.mp3")
-    return np_array_to_mp3(processed, rate, out_path)
-
-def normalize_audio_mp3(file_path: str, output_path: str = None) -> str:#ノーマライズ曲の途中で音量が大きくなったり小さくなったりするするのを均一化する
-    audio = AudioSegment.from_mp3(file_path)
-    normalized_audio = normalize(audio)
-    out_path = output_path or file_path.replace(".mp3", "_normalized.mp3")
-    normalized_audio.export(out_path, format="mp3")
-    return out_path
+    
+    
+    return np_array_to_mp3(processed, rate,output_path)
 
 def mp3_to_np_array(audio: AudioSegment):#データをnumpy行列に変換、左右ごとに聞こえる音が分けられてる場合は平均化して1つに統一する
     samples = np.array(audio.get_array_of_samples())
@@ -68,7 +65,13 @@ def apply_equalizer(rate, data, bands, gains):#process_audio_mp3で指定した�
 
     fft_data_eq = fft_data * gain_array
     processed_data = np.fft.irfft(fft_data_eq)
-    processed_data = np.int16(processed_data / np.max(np.abs(processed_data)) * TWO_FIFTEEN)
+    max_val = np.max(np.abs(processed_data))
+    
+    #無音だったときprocessed_data÷0にならないようにケアしてる
+    if max_val > 0:
+        processed_data = (processed_data / max_val ) * TWO_FIFTEEN
+
+    processed_data=np.int16(processed_data)
     return processed_data
 
     
@@ -90,7 +93,7 @@ def reduce_noise(audio: AudioSegment, threshold_db: float = -35.0) -> AudioSegme
     )
     return clean_audio
 
-def backend_call(input_path, tag=None, gains=None):
+def backend_call(input_path):
     # 音声を読み込み → メルスペクトログラム作成
     y, sr = librosa.load(input_path, sr=22050)
     mel = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=128)
@@ -114,10 +117,8 @@ def backend_call(input_path, tag=None, gains=None):
     #ノーマライズ
     processed_audio = normalize(processed_audio)
     #イコライザ変換
-    rate, samples = mp3_to_np_array(audio=processed_audio)
 
+    output_path = input_path.replace(".mp3", "processed.mp3")
+    processed_audio = process_audio_mp3(audio_segment=processed_audio,tag=pred_label,output_path=output_path)
 
-    processed_audio = process_audio_mp3()
-    # APIでJSONで返す形にする
-    output_path = np_array_to_mp3(samples=processed_audio,rate=rate,output_path=input_path.replace(".mp3","_processed.mp3"))
-    return output_path
+    return processed_audio

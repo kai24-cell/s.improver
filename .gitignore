@@ -13,3 +13,7 @@ app/*.pyc
 #モデルの重み
 *.hdf5
 __pycache__/
+#解析ツール一旦無視
+ffmpeg-8.0-essentials_build/
+*.exe
+*.h5
