@@ -1,95 +1,109 @@
 "use strict";
-// フォーム要素を取得
-const optimizeForm = document.getElementById('optimize-form');
 
-// 結果表示用の要素をあらかじめ取得
+const optimizeForm = document.getElementById('optimize-form');
 const result = document.getElementById('result');
 const preview = document.getElementById('link-preview');
+const submitButton = document.getElementById('length');
 
-// フォームが存在する場合のみイベントリスナーを追加 (nullチェック)
+function base64ToBlob(base64, mimeType) {
+    const bin = atob(base64); // Base64をデコード
+    const len = bin.length;
+    const arr = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+        arr[i] = bin.charCodeAt(i);
+    }
+    return new Blob([arr], { type: mimeType });
+}
+
 if (optimizeForm) {
-    // submit イベントは非同期処理 (async) にします
     optimizeForm.addEventListener('submit', async function (e) {
-        var _a;
         e.preventDefault();
 
-        // --- フォームデータを取得 ---
+
         const urlInput = document.getElementById('url').value;
-        const fileInput = (_a = document.getElementById('file').files) === null || _a === void 0 ? void 0 : _a[0];
+        const fileInput = document.getElementById('file').files?.[0];
 
-        // --- 入力チェックとプレビュー表示 ---
         preview.style.display = 'block';
-
         if (!fileInput && !urlInput) {
             preview.innerHTML = `<p style="color: red;">URLかファイルのどちらかを入力・選択してください。</p>`;
             result.style.display = 'none';
             return;
         }
 
-        // FormDataオブジェクトを作成 (ファイルをサーバーに送信するために必要)
         const formData = new FormData();
-
-        if (fileInput) { 
+        if (fileInput) {
             preview.innerHTML = `<strong>選択されたファイル:</strong><br>${fileInput.name}`;
-            // Python側が 'file' というキーで待っているので、'file' というキーで追加
-            formData.append('file', fileInput); 
-        }
-        else if (urlInput) {
+            formData.append('file', fileInput);
+        } else if (urlInput) {
             preview.innerHTML = `<strong>入力されたURL:</strong><br><a href="${urlInput}" target="_blank" style="color:#4caf50;">${urlInput}</a>`;
-            // (注: 現在のPython APIはURL処理に対応していません。ここではファイルのみを想定します)
-            // もしURLも送る場合は、formData.append('url', urlInput); のようにします
-            
-            // 現状、ファイル入力のみを優先する場合
-            if (!fileInput) {
-                 preview.innerHTML = `<p style="color: red;">（現在はファイルアップロードのみ対応しています）</p>`;
-                 return;
-            }
+            formData.append('url', urlInput);
         }
 
-        // --- サーバーへの送信処理 (ここが重要) ---
         result.style.display = 'block';
-        result.innerHTML = '<p>解析中...サーバーに送信しています。</p>';
+        result.innerHTML = '<p>解析中...サーバーに送信しています。(1〜2分かかる場合があります)</p>';
+        submitButton.disabled = true;
+        submitButton.innerText = '処理中...';
 
         try {
-            // fetch API を使って /process エンドポイントに POST リクエストを送信
-            const response = await fetch('/process', {
+            const response = await fetch('http://127.0.0.1:5000/process', {
                 method: 'POST',
-                body: formData, // FormData オブジェクトを body に設定
+                body: formData,
             });
 
             if (response.ok) {
-                // サーバーからファイルが正常に返ってきた場合
-                result.innerHTML = '<p>処理が完了しました。ダウンロードを開始します。</p>';
+                const data = await response.json();
 
-                // レスポンスからファイルデータを取得 (Blobオブジェクトとして)
-                const blob = await response.blob();
-                
-                // ダウンロード用のリンクを動的に作成
-                const downloadUrl = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.style.display = 'none';
-                a.href = downloadUrl;
-                // Python側で指定した download_name があればそれが使われますが、
-                // 万が一のためにフロント側でもファイル名を指定できます
-                a.download = 'processed_audio.mp3'; 
-                document.body.appendChild(a);
-                
-                // リンクをクリックしてダウンロードを実行
-                a.click();
-                
-                // 後片付け
-                window.URL.revokeObjectURL(downloadUrl);
-                a.remove();
+                let htmlContent = '<h3>処理完了</h3>';
+
+                if (data.transcript) {
+                    htmlContent += `
+                        <div style="background: #333; padding: 15px; margin: 10px 0; border-radius: 5px; text-align: left;">
+                            <strong style="color: #4caf50;">文字起こし:</strong>
+                            <p style="color: #fff; margin-top: 5px;">${data.transcript}</p>
+                        </div>`;
+                }
+
+                if (data.tags && data.tags.length > 0) {
+                    const tagsHtml = data.tags.map(tag => 
+                        `<span style="background: #4caf50; color: white; padding: 2px 8px; border-radius: 10px; margin-right: 5px; font-size: 0.9em;">${tag}</span>`
+                    ).join('');
+                    
+                    htmlContent += `
+                        <div style="background: #333; padding: 15px; margin: 10px 0; border-radius: 5px; text-align: left;">
+                            <strong style="color: #4caf50;">抽出タグ:</strong>
+                            <div style="margin-top: 10px;">${tagsHtml}</div>
+                        </div>`;
+                }
+
+                result.innerHTML = htmlContent;
+
+                if (data.audio_data) {
+                    // Base64をBlobに変換
+                    const blob = base64ToBlob(data.audio_data, 'audio/mpeg');
+                    const downloadUrl = window.URL.createObjectURL(blob);
+                    
+                    // ダウンロードボタンを作成して表示
+                    const downloadBtn = document.createElement('a');
+                    downloadBtn.href = downloadUrl;
+                    downloadBtn.download = data.filename || 'processed_audio.mp3';
+                    downloadBtn.innerText = '音声をダウンロード';
+                    downloadBtn.style.cssText = "display: inline-block; background: #4caf50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 10px; font-weight: bold;";
+                    
+                    result.appendChild(downloadBtn);
+                }
 
             } else {
-                // サーバーがエラーを返した場合
-                result.innerHTML = `<p style="color: red;">エラーが発生しました。サーバー側で問題が起きた可能性があります。</p>`;
+                const errorText = await response.text();
+                console.error('Server Error:', errorText);
+                result.innerHTML = `<p style="color: red;">エラー: ${errorText}</p>`;
             }
 
         } catch (error) {
-            // ネットワークエラーなど
             console.error('Fetch Error:', error);
-            result.innerHTML = `<p style="color: red;">送信エラー。サーバーに接続できませんでした。</p>`;
+            result.innerHTML = `<p style="color: red;">通信エラー。コンソールを確認してください。</p>`;
+        } finally {
+            submitButton.disabled = false;
+            submitButton.innerText = '最適化開始';
         }
     });
 }

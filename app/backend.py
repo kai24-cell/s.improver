@@ -1,19 +1,94 @@
+import os
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))#pydubがffmpegを見つけられるようにパスを通す
+os.environ["PATH"] += os.pathsep + BASE_DIR
+
 from pydub import AudioSegment
 from pydub.effects import normalize
 import numpy as np
-import io
-import os
 import tensorflow as tf
 import librosa
+import azure.cognitiveservices.speech as speechsdk
+from azure.ai.textanalytics import TextAnalyticsClient
+from azure.core.credentials import AzureKeyCredential
+from dotenv import load_dotenv
+load_dotenv()
 
+SPEECH_KEY = os.getenv("SPEECH_KEY")
+SPEECH_REGION = os.getenv("SPEECH_REGION")
+LANGUAGE_KEY = os.getenv("LANGUAGE_KEY")
+LANGUAGE_ENDPOINT = os.getenv("LANGUAGE_ENDPOINT")
 try:
-    model=tf.keras.models.load_model('music_speech.cnn.keras')
+    model_path = os.path.join(BASE_DIR, 'music_speech_cnn.keras')
+    model=tf.keras.models.load_model(model_path)
 except:
     print("モデルの読み取りに失敗しました")
     model=None
     
 TWO_FIFTEEN = 32768 - 1
 fifty_per=0.5
+
+def analyze_speech_content(audio_path):
+    temp_wav ="temp_for_azure.wav"
+    try:
+        sound = AudioSegment.from_file(audio_path)
+        sound.export(temp_wav, format="wav")
+    except Exception as e:
+        print(f"変換エラー: {e}")
+        return None
+
+    #音声認識 (Speech to Text)
+    speech_config = speechsdk.SpeechConfig(subscription=SPEECH_KEY, region=SPEECH_REGION)
+    speech_config.speech_recognition_language = "ja-JP" 
+    
+    audio_config = speechsdk.audio.AudioConfig(filename=temp_wav)
+    speech_recognizer = speechsdk.SpeechRecognizer(speech_config=speech_config, audio_config=audio_config)
+
+    print("文字起こし実行中...")
+    result = speech_recognizer.recognize_once_async().get()
+    
+    transcribed_text = ""
+    if result.reason == speechsdk.ResultReason.RecognizedSpeech:
+        transcribed_text = result.text
+        print(f"文字起こし結果: {transcribed_text}")
+    else:
+        print("音声認識できませんでした (無音またはノイズ)")
+        if os.path.exists(temp_wav):
+            os.remove(temp_wav)
+        return None
+
+    # キーフレーズ抽出 (Language Service)
+    tags = []
+    if transcribed_text:
+        try:
+            ta_client = TextAnalyticsClient(endpoint=LANGUAGE_ENDPOINT, credential=AzureKeyCredential(LANGUAGE_KEY))
+            documents = [transcribed_text]
+            response = ta_client.extract_key_phrases(documents=documents)[0]
+            if not response.is_error:
+                tags = response.key_phrases
+                print(f"抽出タグ: {tags}")
+            else:
+                print(f"タグ抽出エラー: {response.error}")
+        except Exception as e:
+            print(f"Language API エラー: {e}")
+
+    # 一時ファイルの削除
+    if os.path.exists(temp_wav):
+        try:
+            import gc
+            if 'speech_recognizer' in locals():
+                del speech_recognizer
+            gc.collect()
+            
+            os.remove(temp_wav)
+        except Exception:
+            print("一時ファイルがロックされており削除できませんでした（無視します）")
+            pass
+        
+    return {"text": transcribed_text, "tags": tags}
+
+
+
+
 #音声の特定の周波数帯域の音量を調整
 """
 bands:強調する場所
@@ -111,14 +186,23 @@ def backend_call(input_path):
     print(f"{prediction[0][0]:.3f}は -> {pred_label}と判断されました")
 
     #音質向上処理開始
-    audio = AudioSegment.from_mp3(input_path)
+    audio = AudioSegment.from_file(input_path)
     #ノイズ除去
     processed_audio = reduce_noise(audio)
     #ノーマライズ
     processed_audio = normalize(processed_audio)
     #イコライザ変換
 
-    output_path = input_path.replace(".mp3", "processed.mp3")
+    output_path = input_path.replace(".mp3", "_processed.mp3")
     processed_audio = process_audio_mp3(audio_segment=processed_audio,tag=pred_label,output_path=output_path)
 
-    return processed_audio
+    #テキスト機能
+    ai_data = None
+    if pred_label == "speech":
+        ai_data = analyze_speech_content(processed_audio)
+        if ai_data:
+            txt_path = processed_audio.replace(".mp3", ".txt")
+            with open(txt_path, "w", encoding="utf-8") as f:
+                f.write(f"Transcript: {ai_data['text']}\n")
+                f.write(f"Tags: {', '.join(ai_data['tags'])}")
+    return processed_audio,ai_data

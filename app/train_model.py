@@ -16,7 +16,7 @@ def extract_features(file_path, sr=22050, max_frames=128):
     return mel_db[..., np.newaxis]
 
 # データとラベル準備
-data_dir = "../data/train"  
+data_dir = "../music-auto_tagging-keras/data/train" 
 X, y = [], []
 for label, folder in enumerate(["speech", "music"]):
     folder_path = os.path.join(data_dir, folder)
